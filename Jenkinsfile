@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = "riyaazkhanhub/vote"
+        TAG = "v${BUILD_NUMBER}"
+    }
+
     options {
         buildDiscarder(logRotator(numToKeepStr: '15'))
         disableConcurrentBuilds()
@@ -15,26 +20,47 @@ pipeline {
 
     stages {
 
-        stage("Docker login and push") {
+        stage("Build Docker Image") {
             steps {
-
-                sh "docker login -u riyazkhanhub -p p@ssW0rd#123"
-
                 sh '''
                 cd vote
-                docker build -t riyazkhanhub/vote:v${BUILD_NUMBER} .
+                docker build -t $IMAGE_NAME:$TAG .
                 '''
-
-                sh "docker push riyazkhanhub/vote:v${BUILD_NUMBER}"
-
             }
         }
 
-        stage("deploy") {
+        stage("Docker Login & Push") {
             steps {
-                sh "echo starting deployment"
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push $IMAGE_NAME:$TAG
+                    '''
+                }
             }
         }
 
+        stage("Deploy") {
+            steps {
+                sh '''
+                docker stop vote-container || true
+                docker rm vote-container || true
+                docker run -d -p 8081:80 --name vote-container $IMAGE_NAME:$TAG
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment Successful 🚀"
+        }
+        failure {
+            echo "Build Failed ❌"
+        }
     }
 }
