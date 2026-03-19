@@ -40,8 +40,14 @@ pipeline {
         }
 
         stage("Deploy") {
-            steps {
-                sh "echo starting deployment"
+        steps {
+        sh '''
+        docker stop vote || true
+        docker rm vote || true
+        docker run -d -p 8081:80 --name vote riyazkhanhub/vote:v${BUILD_NUMBER}
+        '''
+    }
+}
             }
         }
     }
